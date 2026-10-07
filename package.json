@@ -1,0 +1,28 @@
+{
+  "name": "urbanshield-monorepo",
+  "version": "1.0.0",
+  "description": "UrbanShield - Unified Smart City Incident Management & Emergency Response Network",
+  "private": true,
+  "scripts": {
+    "install:all": "npm --prefix shared install && npm --prefix server install && npm --prefix client install",
+    "build:shared": "npm --prefix shared run build",
+    "build:client": "npm --prefix client run build",
+    "build:server": "npm --prefix server run build",
+    "build": "npm run build:client && npm run build:server",
+    "start": "npm --prefix server run start",
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "migrate": "node scripts/migrate.js",
+    "check:tables": "node scripts/check-tables.js",
+    "test:gemini": "node scripts/test-gemini.js"
+  },
+  "keywords": [
+    "smart-city",
+    "emergency-response",
+    "gemini",
+    "supabase",
+    "gis"
+  ],
+  "author": "UrbanShield AI Core",
+  "license": "MIT"
+}
