@@ -159,7 +159,23 @@ function generateHeuristicTriage(payload: MultimodalPayload): AITriageAnalysis {
   };
 }
 
+// Rate-limiting / quota circuit breaker
+let quotaCooldownUntil = 0;
+
 export async function analyzeIncidentMultimodal(payload: MultimodalPayload): Promise<AITriageAnalysis> {
+  const now = Date.now();
+  
+  // If quota was previously exhausted or API key is not configured, immediately use zero-latency heuristic triage
+  if (!apiKey || now < quotaCooldownUntil) {
+    if (!apiKey) {
+      console.log('[UrbanShield AI] GEMINI_API_KEY not configured. Using zero-latency Emergency Heuristic Triage.');
+    } else {
+      const remainingSecs = Math.ceil((quotaCooldownUntil - now) / 1000);
+      console.log(`[UrbanShield AI] Quota cooldown active (${remainingSecs}s remaining). Using zero-latency Emergency Heuristic Triage.`);
+    }
+    return generateHeuristicTriage(payload);
+  }
+
   const parts: any[] = [];
 
   let prompt = `${SYSTEM_INSTRUCTION}\n\n`;
@@ -192,38 +208,42 @@ export async function analyzeIncidentMultimodal(payload: MultimodalPayload): Pro
     });
   }
 
-  const modelsToTry = [GEMINI_MODEL, 'gemini-2.5-flash'];
+  try {
+    console.log(`[UrbanShield AI] Initiating multimodal triage via ${GEMINI_MODEL}...`);
+    
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('AI API call timed out after 5s')), 5000)
+    );
 
-  for (const modelName of modelsToTry) {
-    try {
-      console.log(`[UrbanShield AI] Initiating multimodal triage via ${modelName}...`);
-      
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('AI API call timed out after 8s')), 8000)
-      );
+    const generatePromise = ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: parts,
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: triageOutputSchema,
+      },
+    });
 
-      const generatePromise = ai.models.generateContent({
-        model: modelName,
-        contents: parts,
-        config: {
-          responseMimeType: 'application/json',
-          responseSchema: triageOutputSchema,
-        },
-      });
+    const response: any = await Promise.race([generatePromise, timeoutPromise]);
 
-      const response: any = await Promise.race([generatePromise, timeoutPromise]);
+    if (response && response.text) {
+      const parsed = JSON.parse(response.text.trim()) as AITriageAnalysis;
+      console.log(`[UrbanShield AI] Successfully triaged incident: "${parsed.title}" [${parsed.severity}]`);
+      return parsed;
+    }
+  } catch (err: any) {
+    const errMsg = err?.message || String(err);
+    console.warn(`[UrbanShield AI] Gemini API notice: ${errMsg}`);
 
-      if (response && response.text) {
-        const parsed = JSON.parse(response.text.trim()) as AITriageAnalysis;
-        console.log(`[UrbanShield AI] Successfully triaged incident: "${parsed.title}" [${parsed.severity}]`);
-        return parsed;
-      }
-    } catch (err: any) {
-      console.warn(`[UrbanShield AI] Model ${modelName} returned notice: ${err.message}`);
+    // If quota exceeded or 429, engage 15-minute circuit breaker so subsequent emergency calls don't hang
+    if (errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) {
+      quotaCooldownUntil = Date.now() + 15 * 60 * 1000;
+      console.warn('[UrbanShield AI] Gemini quota reached. Activating 15-minute circuit breaker.');
     }
   }
 
-  // Resilient heuristic emergency triage
+  // Instant resilient heuristic emergency triage
   console.log('[UrbanShield AI] Activating zero-latency Emergency Heuristic Triage Engine...');
   return generateHeuristicTriage(payload);
 }
+

@@ -341,7 +341,7 @@ export const MedicalPortal: React.FC = () => {
                     RESPONSE STATUS WORKFLOW
                   </span>
                   <div className="grid grid-cols-3 gap-1.5 pt-1">
-                    {(['DISPATCHED', 'EN ROUTE', 'RESOLVED'] as IncidentStatus[]).map((st) => (
+                    {(['DISPATCHED', 'ON_SCENE', 'RESOLVED'] as IncidentStatus[]).map((st) => (
                       <button
                         key={st}
                         onClick={() => handleStatusUpdate(st)}

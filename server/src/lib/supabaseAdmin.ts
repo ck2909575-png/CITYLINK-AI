@@ -14,8 +14,12 @@ import { calculateDistanceMeters } from './geospatial';
 import { EventEmitter } from 'events';
 import crypto from 'crypto';
 
+import 'dotenv/config';
+
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://pmrbnwdhchgsbtelnwwu.supabase.co';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBtcmJud2RoY2hnc2J0ZWxud3d1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5MTM1MjE5NywiZXhwIjoyMTA2OTI4MTk3fQ.rSCvtRl0WEnMqeW9UxyWFzITZV9eYzmaldjkaGY3vug';
 
 export const supabase: SupabaseClient = createClient(
   SUPABASE_URL,

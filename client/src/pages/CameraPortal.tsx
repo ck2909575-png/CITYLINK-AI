@@ -3,6 +3,7 @@ import { useCameras } from '../hooks/useCameras';
 import { CameraRecord } from '@urbanshield/shared';
 import { DepartmentNav } from '../components/DepartmentNav';
 import { AddCameraModal } from '../components/AddCameraModal';
+import { LiveCameraPlayer } from '../components/LiveCameraPlayer';
 import {
   Camera,
   Video,
@@ -17,15 +18,24 @@ import {
   Smartphone,
   Eye,
   Clock,
+  Sparkles,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export const CameraPortal: React.FC = () => {
   const { data: cameras = [], refetch, isFetching } = useCameras('command_operator');
   const [isAddCameraOpen, setIsAddCameraOpen] = useState(false);
+  const [selectedWatchCamera, setSelectedWatchCamera] = useState<CameraRecord | null>(null);
 
   const onlineCameras = cameras.filter((c) => c.status === 'ONLINE');
   const offlineCameras = cameras.filter((c) => c.status === 'OFFLINE');
+
+  // Default active camera: selected camera or CAMERA-07 or first camera
+  const activeCamera =
+    selectedWatchCamera ||
+    cameras.find((c) => c.id === 'CAMERA-07') ||
+    cameras[0] ||
+    null;
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-4rem)] bg-command-950">
@@ -54,6 +64,15 @@ export const CameraPortal: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-3">
+            <Link
+              to="/camera/connect?cam=CAMERA-07"
+              target="_blank"
+              className="px-3 py-1.5 bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-300 border border-cyan-500/40 rounded-xl font-mono text-xs font-bold transition flex items-center space-x-1.5"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>START PHONE NODE (CAM-07)</span>
+            </Link>
+
             <div className="flex items-center space-x-3 px-3 py-1.5 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono">
               <span className="flex items-center gap-1.5 text-emerald-400">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -84,7 +103,21 @@ export const CameraPortal: React.FC = () => {
           </div>
         </div>
 
-
+        {/* Live Command Video Player Monitor */}
+        {activeCamera && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-mono text-slate-400">
+              <span className="flex items-center gap-1.5 text-cyan-400 font-bold uppercase tracking-wider">
+                <Video className="w-4 h-4" />
+                Active Tactical Video Monitor: <span className="text-white">{activeCamera.id}</span>
+              </span>
+              <span className="text-[11px] text-slate-500">
+                Click any camera card below to switch feed
+              </span>
+            </div>
+            <LiveCameraPlayer camera={activeCamera} className="w-full max-w-4xl mx-auto shadow-2xl" />
+          </div>
+        )}
 
         {/* Camera Fleet Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -172,21 +205,32 @@ export const CameraPortal: React.FC = () => {
 
                 {/* Node Status / Actions */}
                 <div className="pt-1 flex items-center space-x-2">
-                  {isMobile ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedWatchCamera(camera);
+                      window.scrollTo({ top: 100, behavior: 'smooth' });
+                    }}
+                    className={`py-2 px-3 font-mono font-bold text-xs rounded-xl transition flex items-center justify-center space-x-1.5 flex-1 ${
+                      activeCamera?.id === camera.id
+                        ? 'bg-emerald-600 text-white shadow-md'
+                        : 'bg-slate-800 hover:bg-slate-700 text-slate-200'
+                    }`}
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>{activeCamera?.id === camera.id ? 'NOW PLAYING' : 'WATCH FEED'}</span>
+                  </button>
+
+                  {isMobile && (
                     <Link
                       to={`/camera/connect?cam=${camera.id}`}
                       target="_blank"
-                      className="w-full py-2 bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 border border-cyan-500/40 font-mono font-bold text-xs rounded-xl transition flex items-center justify-center space-x-1.5"
+                      className="py-2 px-3 bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 border border-cyan-500/40 font-mono font-bold text-xs rounded-xl transition flex items-center justify-center space-x-1"
                       title="Open Mobile Streamer Interface"
                     >
                       <ExternalLink className="w-3.5 h-3.5" />
-                      <span>OPEN MOBILE STREAMER</span>
+                      <span>STREAM</span>
                     </Link>
-                  ) : (
-                    <div className="w-full py-2 px-3 bg-slate-950/60 rounded-xl border border-slate-850 text-slate-500 font-mono text-xs text-center flex items-center justify-center space-x-1.5">
-                      <Camera className="w-3.5 h-3.5 text-slate-400" />
-                      <span>AUTHORIZED FIXED NODE</span>
-                    </div>
                   )}
                 </div>
               </div>

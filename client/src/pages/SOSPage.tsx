@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   ShieldAlert,
   Mic,
@@ -16,6 +16,10 @@ import {
   Sparkles,
   RefreshCw,
   X,
+  Volume2,
+  VolumeX,
+  Play,
+  RotateCcw,
 } from 'lucide-react';
 import { useGeolocation } from '../hooks/useGeolocation';
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition';
@@ -27,6 +31,41 @@ const CATEGORIES = [
   { id: 'FIRE_RESCUE', label: 'Fire / Smoke', icon: Flame, color: 'text-red-400' },
   { id: 'MEDICAL_EMERGENCY', label: 'Medical EMS', icon: Activity, color: 'text-emerald-400' },
   { id: 'INFRASTRUCTURE_HAZARD', label: 'Chemical / Hazard', icon: Skull, color: 'text-amber-400' },
+];
+
+const PRESETS = [
+  {
+    label: '🚗 Car Collision & Trapped',
+    cat: 'TRAFFIC_ACCIDENT',
+    text: 'High-speed vehicle crash at intersection. Debris scattered, driver trapped inside cabin, coolant leaking on road.',
+    trapped: true,
+    flames: false,
+    gas: false,
+  },
+  {
+    label: '🔥 Active Structural Fire',
+    cat: 'FIRE_RESCUE',
+    text: 'Intense structural fire with heavy black smoke and visible flames emanating from the second-floor windows.',
+    trapped: false,
+    flames: true,
+    gas: false,
+  },
+  {
+    label: '🚑 Severe Cardiac Trauma',
+    cat: 'MEDICAL_EMERGENCY',
+    text: 'Adult male collapsed unconscious with respiratory distress and severe chest pains. Immediate paramedic CPR required.',
+    trapped: false,
+    flames: false,
+    gas: false,
+  },
+  {
+    label: '☣️ Gas Leak / Toxic Hazard',
+    cat: 'INFRASTRUCTURE_HAZARD',
+    text: 'Pungent chemical vapor and loud hissing gas leak near pedestrian crosswalk. Citizens evacuating perimeter.',
+    trapped: false,
+    flames: false,
+    gas: true,
+  },
 ];
 
 export const SOSPage: React.FC = () => {
@@ -50,6 +89,10 @@ export const SOSPage: React.FC = () => {
   const [hasChemicalOdor, setHasChemicalOdor] = useState(false);
   const [reporterPhone, setReporterPhone] = useState('');
 
+  // Voice synthesis (Talking response)
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(true);
+
   // File uploads
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -60,6 +103,47 @@ export const SOSPage: React.FC = () => {
   const [submittedResult, setSubmittedResult] = useState<any | null>(null);
 
   const { mutate: submitSOS, isPending: isSubmitting } = useSubmitSOS();
+
+  useEffect(() => {
+    setSpeechSupported('speechSynthesis' in window);
+    return () => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
+
+  const speakAdvisory = (text: string) => {
+    if (!('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.95;
+      utterance.pitch = 1.0;
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+      window.speechSynthesis.speak(utterance);
+    } catch (e) {
+      console.warn('Speech synthesis error:', e);
+      setIsSpeaking(false);
+    }
+  };
+
+  const stopSpeaking = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+      setIsSpeaking(false);
+    }
+  };
+
+  const handleApplyPreset = (p: typeof PRESETS[0]) => {
+    setCategoryHint(p.cat);
+    setDescription(p.text);
+    setHasTrappedIndividuals(p.trapped);
+    setHasVisibleFlames(p.flames);
+    setHasChemicalOdor(p.gas);
+  };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -80,7 +164,7 @@ export const SOSPage: React.FC = () => {
 
     const finalDescription = (description + ' ' + transcript).trim();
     if (!finalDescription) {
-      alert('Please provide an incident description or use the voice recording widget.');
+      alert('Please provide an incident description or use one of the quick 1-click presets.');
       return;
     }
 
@@ -113,6 +197,12 @@ export const SOSPage: React.FC = () => {
       onSuccess: (data) => {
         setSubmittedResult(data);
         window.scrollTo({ top: 0, behavior: 'smooth' });
+
+        // Audible spoken response back to the citizen immediately
+        const agencyName = (data.incident?.primary_agency || 'Emergency Response').replace(/_/g, ' ');
+        const advisory = data.incident?.citizen_advisory || 'Please maintain a safe perimeter and await emergency units.';
+        const speechAnnouncement = `Emergency report registered and verified. Severity level: ${data.incident?.severity}. First responders from ${agencyName} are notified. Action advisory: ${advisory}`;
+        speakAdvisory(speechAnnouncement);
       },
     });
   };
@@ -191,21 +281,64 @@ export const SOSPage: React.FC = () => {
             )}
           </div>
 
-          {/* Citizen Advisory */}
+          {/* Citizen Advisory & Live Voice Speech Bar */}
           {submittedResult.incident.citizen_advisory && (
-            <div className="p-3.5 bg-emerald-950/40 border border-emerald-800/80 rounded-xl space-y-1">
-              <span className="text-xs font-bold text-emerald-400 flex items-center space-x-1">
-                <span>🛡️ IMMEDIATE LIFE-SAFETY ACTION ADVISORY:</span>
-              </span>
-              <p className="text-xs text-slate-200 leading-relaxed font-semibold">
-                {submittedResult.incident.citizen_advisory}
+            <div className="p-4 bg-emerald-950/40 border border-emerald-500/50 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-emerald-400 flex items-center space-x-1.5 font-mono">
+                  <Volume2 className={`w-4 h-4 ${isSpeaking ? 'animate-bounce text-emerald-300' : ''}`} />
+                  <span>🛡️ AI LIFE-SAFETY VOICE ADVISORY</span>
+                </span>
+                
+                {speechSupported && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (isSpeaking) {
+                        stopSpeaking();
+                      } else {
+                        const agencyName = (submittedResult.incident?.primary_agency || 'Emergency Response').replace(/_/g, ' ');
+                        speakAdvisory(`Emergency report verified. Severity: ${submittedResult.incident?.severity}. Units from ${agencyName} are dispatched. Advisory: ${submittedResult.incident?.citizen_advisory}`);
+                      }
+                    }}
+                    className={`px-3 py-1 rounded-lg text-xs font-mono font-bold flex items-center space-x-1.5 transition ${
+                      isSpeaking
+                        ? 'bg-red-600 text-white animate-pulse'
+                        : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md'
+                    }`}
+                  >
+                    {isSpeaking ? (
+                      <>
+                        <VolumeX className="w-3.5 h-3.5" />
+                        <span>Mute Voice</span>
+                      </>
+                    ) : (
+                      <>
+                        <Volume2 className="w-3.5 h-3.5" />
+                        <span>Replay Voice Advisory</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              <p className="text-sm text-slate-100 leading-relaxed font-semibold bg-emerald-950/60 p-3 rounded-xl border border-emerald-800/40">
+                "{submittedResult.incident.citizen_advisory}"
               </p>
+
+              {isSpeaking && (
+                <div className="flex items-center space-x-2 text-[11px] font-mono text-emerald-300">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span>Synthesizing calm audio instructions aloud...</span>
+                </div>
+              )}
             </div>
           )}
 
           <div className="flex items-center justify-end space-x-3 pt-2">
             <button
               onClick={() => {
+                stopSpeaking();
                 setSubmittedResult(null);
                 setDescription('');
                 resetTranscript();
@@ -217,6 +350,7 @@ export const SOSPage: React.FC = () => {
             </button>
             <Link
               to="/command"
+              onClick={() => stopSpeaking()}
               className="px-4 py-2 text-xs font-bold text-white bg-cyan-600 hover:bg-cyan-500 rounded-lg flex items-center space-x-1"
             >
               <span>Track in Command Grid</span>
@@ -261,14 +395,39 @@ export const SOSPage: React.FC = () => {
           </div>
         </div>
 
+        {/* 1-Click Quick Emergency Presets for Instant Testing */}
+        <div className="space-y-2">
+          <label className="text-xs font-mono text-slate-400 uppercase tracking-wider block">
+            ⚡ Quick 1-Click Emergency Presets (Instant Voice & Triage Test)
+          </label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {PRESETS.map((p, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => handleApplyPreset(p)}
+                className="p-2.5 rounded-xl bg-command-950/60 hover:bg-command-800/80 border border-command-800 hover:border-cyan-500/50 text-left transition text-xs flex items-center justify-between group"
+              >
+                <span className="font-bold text-slate-200 group-hover:text-cyan-300 truncate">
+                  {p.label}
+                </span>
+                <span className="text-[10px] font-mono text-slate-500 group-hover:text-cyan-400 shrink-0 ml-2">
+                  Use Preset →
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Voice-to-Text & Description */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <label className="text-xs font-mono text-slate-300 uppercase tracking-wider">
               2. Describe Emergency (Voice or Text)
             </label>
-            <span className="text-[11px] text-slate-400 font-mono">
-              Web Speech & Gemini Audio Multimodal
+            <span className="text-[11px] text-cyan-400 font-mono flex items-center gap-1">
+              <Volume2 className="w-3 h-3" />
+              <span>Voice Feedback Active</span>
             </span>
           </div>
 

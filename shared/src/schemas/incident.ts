@@ -69,7 +69,14 @@ export const IncidentInputSchema = z.object({
 export type IncidentInput = z.infer<typeof IncidentInputSchema>;
 
 export const IncidentUpdateStatusSchema = z.object({
-  status: IncidentStatusEnum,
+  status: z.preprocess((val) => {
+    if (typeof val === 'string') {
+      const normalized = val.trim().toUpperCase().replace(/\s+/g, '_');
+      if (normalized === 'EN_ROUTE' || normalized === 'EN ROUTE') return 'ON_SCENE';
+      return normalized;
+    }
+    return val;
+  }, IncidentStatusEnum),
   unit_id: z.string().optional(),
   notes: z.string().max(500).optional(),
 });

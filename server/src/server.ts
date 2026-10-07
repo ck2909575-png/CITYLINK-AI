@@ -1,13 +1,10 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import http from 'http';
 import fs from 'fs';
 import { WebSocketServer, WebSocket } from 'ws';
-import dotenv from 'dotenv';
-
-// Load environment variables
-dotenv.config();
 
 import incidentRoutes from './routes/incident.routes';
 import facilityRoutes from './routes/facility.routes';
@@ -229,13 +226,18 @@ wss.on('connection', (ws) => {
 
   ws.on('close', () => {
     clients.delete(ws);
-    // Cleanup if this was a streamer
+    // Cleanup if this was a streamer with a 3-second reconnection grace period
     for (const [camId, streamerWs] of cameraStreamers.entries()) {
       if (streamerWs === ws) {
         cameraStreamers.delete(camId);
-        db.setCameraOffline(camId);
-        broadcastEvent('CAMERA_STREAM_ENDED', { cameraId: camId });
-        console.log(`[WebRTC] Camera streamer disconnected: ${camId}`);
+        setTimeout(() => {
+          // If a new streamer connection hasn't registered in the last 3s, set offline
+          if (!cameraStreamers.has(camId)) {
+            db.setCameraOffline(camId);
+            broadcastEvent('CAMERA_STREAM_ENDED', { cameraId: camId });
+            console.log(`[WebRTC] Camera streamer disconnected and set to offline: ${camId}`);
+          }
+        }, 3000);
       }
     }
     // Cleanup if this was a viewer
