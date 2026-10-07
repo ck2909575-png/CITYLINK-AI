@@ -14,9 +14,11 @@ export async function listResponseUnits(req: Request, res: Response, next: NextF
     const latitude = lat ? parseFloat(lat) : undefined;
     const longitude = lng ? parseFloat(lng) : undefined;
 
+    const normalizedQueryStatus = typeof status === 'string' ? status.trim().toUpperCase().replace(/\s+/g, '_') : undefined;
+
     const units = await db.getUnits({
       agency,
-      status,
+      status: normalizedQueryStatus,
       lat: latitude,
       lng: longitude,
     });
@@ -41,8 +43,13 @@ export async function updateResponseUnit(req: Request, res: Response, next: Next
     const id = req.params.id as string;
     const { status, assigned_incident_id, latitude, longitude } = req.body;
 
+    let normalizedStatus = status;
+    if (typeof status === 'string') {
+      normalizedStatus = status.trim().toUpperCase().replace(/\s+/g, '_');
+    }
+
     const updated = await db.updateUnit(id, {
-      ...(status && { status }),
+      ...(normalizedStatus && { status: normalizedStatus }),
       ...(assigned_incident_id !== undefined && { assigned_incident_id }),
       ...(latitude !== undefined && { latitude }),
       ...(longitude !== undefined && { longitude }),
